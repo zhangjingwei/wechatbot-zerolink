@@ -2,7 +2,11 @@
 
 An independent Node.js SDK for the WeChat iLink Bot API. Source code, examples, and tests are in [`nodejs/`](nodejs/). This repository is based on the upstream `corespeed-io/wechatbot` `node-v2.2.0` release and now maintains only the Node.js implementation.
 
-The repository root declares package name `wechatbot-zerolink` and version `2.2.0-zerolink.2`. See the [protocol audit](docs/protocol-compatibility-3.0.0-beta-0.md) for this branch's WeChat 3.0.0 beta binding support. The package has not been published to npm.
+The current published version is [`wechatbot-zerolink@2.2.0-zerolink.2`](https://www.npmjs.com/package/wechatbot-zerolink), available under the npm `beta` tag. See the [protocol audit](docs/protocol-compatibility-3.0.0-beta-0.md) for the WeChat 3.0.0 beta binding support.
+
+```sh
+npm install wechatbot-zerolink@beta
+```
 
 ## Build and test
 
