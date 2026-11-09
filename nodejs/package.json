@@ -1,6 +1,6 @@
 {
-  "name": "@wechatbot/wechatbot",
-  "version": "2.2.0",
+  "name": "wechatbot-zerolink",
+  "version": "2.2.0-zerolink.1",
   "description": "WeChat iLink Bot SDK — modular, extensible, production-grade",
   "type": "module",
   "exports": {
@@ -27,7 +27,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/corespeed-io/wechatbot.git"
+    "url": "git+https://github.com/zhangjingwei/wechatbot-zerolink.git",
+    "directory": "nodejs"
   },
   "license": "MIT",
   "devDependencies": {

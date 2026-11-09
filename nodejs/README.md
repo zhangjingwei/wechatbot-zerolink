@@ -1,19 +1,17 @@
-# @wechatbot/wechatbot — Node.js SDK
+# wechatbot-zerolink — Node.js SDK
 
-WeChat iLink Bot SDK for Node.js — modular, extensible, production-grade.
+An independent Node.js fork of `@wechatbot/wechatbot` 2.2.0, adding the binding protocol observed in `@tencent-weixin/openclaw-weixin` 3.0.0-beta-0. The fork retains the upstream MIT license and attribution. It is not an official Tencent package.
 
 ## Install
 
-```bash
-npm install @wechatbot/wechatbot
-```
+The package has been built locally but is not yet published to npm. Install the generated `.tgz` artifact with `npm install /path/to/wechatbot-zerolink-2.2.0-zerolink.1.tgz`. Once published, the command will be `npm install wechatbot-zerolink`.
 
 Requires Node.js >= 22 (for native fetch). Zero runtime dependencies.
 
 ## Quick Start
 
 ```typescript
-import { WeChatBot } from '@wechatbot/wechatbot'
+import { WeChatBot } from 'wechatbot-zerolink'
 
 const bot = new WeChatBot()
 await bot.login()
@@ -25,6 +23,28 @@ bot.onMessage(async (msg) => {
 
 await bot.start()
 ```
+
+## 3.0.0-beta-0 binding support
+
+Existing `bot.login()` keeps the 2.2.0 wire request. For a Bot owned by someone else, supply an authorization QR callback; the SDK waits for approval before requesting the Bot QR:
+
+```typescript
+const bot = new WeChatBot({
+  storage: 'file',
+  loginOptions: { bindOwner: 'other', verifyPin: true },
+  loginCallbacks: {
+    onRealnameQrUrl: (url) => showQr(url),
+    onRealnameStatus: (status) => showStatus(status),
+    onQrUrl: (url) => showQr(url),
+    onVerifyCode: async (isRetry) => await askForPin(isRetry),
+  },
+})
+await bot.login()
+```
+
+`bindOwner: 'self'` is the default. `verifyPin: false` omits the proactive PIN field, but a server PIN challenge is still handled. Both `need_verifycode` and `confirmed_but_need_verifycode` invoke `onVerifyCode`. `onRealnameQrUrl` is required in `other` mode so authorization does not proceed invisibly. For noninteractive services, provide `onVerifyCode` as well; otherwise the SDK reads stdin. `loginOptions` also supplies the owner mode after a process restart. A canceled login can use `bot.login({ signal })`.
+
+See [protocol compatibility audit](../docs/protocol-compatibility-3.0.0-beta-0.md) for implementation scope and live validation gaps.
 
 ## Architecture
 

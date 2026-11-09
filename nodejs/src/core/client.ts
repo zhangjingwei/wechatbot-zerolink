@@ -1,7 +1,7 @@
 import { TypedEmitter, type BotEventMap } from './events.js'
 import { NoContextError } from './errors.js'
 
-import { Authenticator, type Credentials, type QrLoginCallbacks } from '../auth/index.js'
+import { Authenticator, type Credentials, type LoginOptions, type QrLoginCallbacks, type RealnameClient } from '../auth/index.js'
 import { createLogger, type Logger, type LogLevel } from '../logger/index.js'
 import {
   MediaDownloader,
@@ -38,6 +38,10 @@ export interface WeChatBotOptions {
   logger?: Logger
   /** QR login callbacks (for rendering QR codes, etc.) */
   loginCallbacks?: QrLoginCallbacks
+  /** Defaults for re-login after restart, including the owner mode. */
+  loginOptions?: Pick<LoginOptions, 'bindOwner' | 'verifyPin'>
+  /** Optional real-name authorization transport for nonstandard hosts or tests. */
+  realnameClient?: RealnameClient
   /**
    * UA-style identifier of the app driving this bot, sent as `base_info.bot_agent`
    * on every API request (e.g. "MyApp/1.2 (prod)"). Invalid values fall back to
@@ -137,6 +141,9 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
   private readonly http: HttpClient
   private readonly api: ILinkApi
   private readonly auth: Authenticator
+  private readonly loginCallbacks?: QrLoginCallbacks
+  private readonly defaultLoginOptions?: Pick<LoginOptions, 'bindOwner' | 'verifyPin'>
+  private lastLoginOptions?: LoginOptions
   private readonly parser: MessageParser
   private readonly middleware: MiddlewareEngine
   private readonly contextStore: ContextStore
@@ -157,11 +164,13 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL
     this.logger = options.logger ?? createLogger({ level: options.logLevel ?? 'info' })
     this.storage = resolveStorage(options)
+    this.loginCallbacks = options.loginCallbacks
+    this.defaultLoginOptions = options.loginOptions
 
     // Build the layered architecture
     this.http = new HttpClient({ logger: this.logger })
     this.api = new ILinkApi(this.http, options.botAgent)
-    this.auth = new Authenticator(this.api, this.storage, this.logger)
+    this.auth = new Authenticator(this.api, this.storage, this.logger, options.realnameClient)
     this.parser = new MessageParser()
     this.middleware = new MiddlewareEngine()
     this.contextStore = new ContextStore(this.storage, this.logger)
@@ -182,13 +191,18 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
   /**
    * Login to WeChat. Uses stored credentials if available, otherwise starts QR flow.
    */
-  async login(options: { force?: boolean; callbacks?: QrLoginCallbacks } = {}): Promise<Credentials> {
+  async login(options: LoginOptions = {}): Promise<Credentials> {
+    const effective = { ...this.defaultLoginOptions, ...this.lastLoginOptions, ...options }
     const creds = await this.auth.login({
-      force: options.force,
+      force: effective.force,
       baseUrl: this.baseUrl,
-      callbacks: options.callbacks,
+      callbacks: effective.callbacks ?? this.loginCallbacks,
+      bindOwner: effective.bindOwner,
+      verifyPin: effective.verifyPin,
+      signal: effective.signal,
     })
 
+    this.lastLoginOptions = { ...effective, force: undefined, signal: undefined }
     this.setCredentials(creds)
     this.emit('login', creds)
     return creds
@@ -447,7 +461,7 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
    * Convenience method: login + start in one call.
    * Equivalent to `await bot.login(); await bot.start()`.
    */
-  async run(options?: { force?: boolean; callbacks?: QrLoginCallbacks }): Promise<void> {
+  async run(options?: LoginOptions): Promise<void> {
     await this.login(options)
     await this.start()
   }

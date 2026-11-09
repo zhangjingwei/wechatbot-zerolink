@@ -1,5 +1,7 @@
 # WeChatBot
 
+> This checkout is the independent ZeroLink fork of upstream `corespeed-io/wechatbot` tag `node-v2.2.0`. Only the Node.js package in `nodejs/` is extended and maintained here as `wechatbot-zerolink`; the Python, Go, and Rust trees below remain upstream snapshots. See [Node.js SDK](nodejs/README.md) and the [3.0.0-beta-0 protocol audit](docs/protocol-compatibility-3.0.0-beta-0.md). The old installation commands and badges below describe upstream releases. This fork has not been published to npm and is not the official Tencent plugin.
+
 <p align="center">
   <strong>微信 iLink Bot SDK for OpenClaw / AI Agent</strong><br/>
   <sub>模块化、生产级、多语言微信 iLink Bot SDK</sub>

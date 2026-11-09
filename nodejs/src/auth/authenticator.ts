@@ -6,7 +6,8 @@ import type { ILinkApi } from '../protocol/api.js'
 import { DEFAULT_BASE_URL } from '../protocol/types.js'
 import type { Storage } from '../storage/interface.js'
 import { STORAGE_KEYS } from '../storage/interface.js'
-import type { Credentials, QrLoginCallbacks } from './types.js'
+import { authorizeOtherOwner, HttpRealnameClient } from './realname.js'
+import type { Credentials, LoginOptions, QrLoginCallbacks, RealnameClient } from './types.js'
 
 const QR_POLL_INTERVAL_MS = 2_000
 /** Maximum number of times to refresh the QR code before giving up. */
@@ -25,6 +26,7 @@ export class Authenticator {
     private readonly api: ILinkApi,
     private readonly storage: Storage,
     logger: Logger,
+    private readonly realnameClient: RealnameClient = new HttpRealnameClient(),
   ) {
     this.logger = logger.child('auth')
   }
@@ -39,11 +41,7 @@ export class Authenticator {
   /**
    * Full login: try stored credentials first, fall back to QR flow.
    */
-  async login(options: {
-    force?: boolean
-    baseUrl?: string
-    callbacks?: QrLoginCallbacks
-  } = {}): Promise<Credentials> {
+  async login(options: LoginOptions & { baseUrl?: string } = {}): Promise<Credentials> {
     const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL
 
     if (!options.force) {
@@ -54,7 +52,18 @@ export class Authenticator {
       }
     }
 
-    return this.qrLogin(baseUrl, options.callbacks)
+    if (options.bindOwner !== undefined && options.bindOwner !== 'self' && options.bindOwner !== 'other') {
+      throw new AuthError('Invalid bindOwner value')
+    }
+    const ticket = options.bindOwner === 'other'
+      ? await authorizeOtherOwner(this.realnameClient, options.callbacks, options.signal)
+      : undefined
+    return this.qrLogin(baseUrl, options.callbacks, {
+      botSpamTicket: ticket?.botSpamTicket,
+      ticketExpireTimeSec: ticket?.expireTimeSec,
+      verifyPin: options.verifyPin,
+      signal: options.signal,
+    })
   }
 
   /**
@@ -76,7 +85,11 @@ export class Authenticator {
    * - Handles `scaned_but_redirect` for IDC redirect
    * - Limits QR refreshes to MAX_QR_REFRESH_COUNT
    */
-  private async qrLogin(baseUrl: string, callbacks?: QrLoginCallbacks): Promise<Credentials> {
+  private async qrLogin(
+    baseUrl: string,
+    callbacks?: QrLoginCallbacks,
+    options: { botSpamTicket?: string; ticketExpireTimeSec?: number; verifyPin?: boolean; signal?: AbortSignal } = {},
+  ): Promise<Credentials> {
     let qrRefreshCount = 0
 
     // Send known local tokens so the server can answer `binded_redirect`
@@ -85,13 +98,21 @@ export class Authenticator {
     const localTokenList = stored?.token ? [stored.token] : []
 
     for (;;) {
+      options.signal?.throwIfAborted()
       qrRefreshCount++
       if (qrRefreshCount > MAX_QR_REFRESH_COUNT) {
         throw new AuthError(`QR code expired ${MAX_QR_REFRESH_COUNT} times — login aborted`)
       }
+      if (options.botSpamTicket && (options.ticketExpireTimeSec ?? 0) * 1000 - Date.now() <= 60_000) {
+        throw new AuthError('Real-name authorization ticket is about to expire; restart login')
+      }
 
       this.logger.info(`Requesting QR code... (${qrRefreshCount}/${MAX_QR_REFRESH_COUNT})`)
-      const qr = await this.api.getQrCode(FIXED_QR_BASE_URL, localTokenList)
+      const qr = await this.api.getQrCode(FIXED_QR_BASE_URL, localTokenList, {
+        botSpamTicket: options.botSpamTicket,
+        verifyPin: options.verifyPin,
+        signal: options.signal,
+      })
 
       // Pass QR URL to developer's callback — display is their responsibility
       if (callbacks?.onQrUrl) {
@@ -107,7 +128,8 @@ export class Authenticator {
       let pendingVerifyCode: string | undefined
 
       for (;;) {
-        const status = await this.api.pollQrStatus(currentPollBaseUrl, qr.qrcode, pendingVerifyCode)
+        options.signal?.throwIfAborted()
+        const status = await this.api.pollQrStatus(currentPollBaseUrl, qr.qrcode, pendingVerifyCode, options.signal)
 
         if (status.status !== lastStatus) {
           lastStatus = status.status
@@ -151,9 +173,9 @@ export class Authenticator {
         }
 
         // Pair-code challenge: ask the user for the digits shown in WeChat
-        if (status.status === 'need_verifycode') {
+        if (status.status === 'need_verifycode' || status.status === 'confirmed_but_need_verifycode') {
           const isRetry = pendingVerifyCode !== undefined
-          pendingVerifyCode = await this.promptVerifyCode(isRetry, callbacks)
+          pendingVerifyCode = await this.promptVerifyCode(isRetry, callbacks, options.signal)
           continue // Re-poll immediately with the code attached
         }
 
@@ -184,7 +206,7 @@ export class Authenticator {
           } else {
             this.logger.warn('Received scaned_but_redirect but redirect_host is missing')
           }
-          await delay(QR_POLL_INTERVAL_MS)
+          await delay(QR_POLL_INTERVAL_MS, undefined, { signal: options.signal })
           continue
         }
 
@@ -192,7 +214,7 @@ export class Authenticator {
           break // Outer loop will request a new QR
         }
 
-        await delay(QR_POLL_INTERVAL_MS)
+        await delay(QR_POLL_INTERVAL_MS, undefined, { signal: options.signal })
       }
     }
   }
@@ -204,9 +226,12 @@ export class Authenticator {
   private async promptVerifyCode(
     isRetry: boolean,
     callbacks?: QrLoginCallbacks,
+    signal?: AbortSignal,
   ): Promise<string> {
     if (callbacks?.onVerifyCode) {
-      return callbacks.onVerifyCode(isRetry)
+      const code = await callbacks.onVerifyCode(isRetry)
+      signal?.throwIfAborted()
+      return code
     }
 
     const prompt = isRetry
@@ -214,7 +239,7 @@ export class Authenticator {
       : 'Enter the pairing code shown in WeChat on your phone: '
     const rl = createInterface({ input: process.stdin, output: process.stdout })
     try {
-      return (await rl.question(prompt)).trim()
+      return (await rl.question(prompt, { signal })).trim()
     } finally {
       rl.close()
     }

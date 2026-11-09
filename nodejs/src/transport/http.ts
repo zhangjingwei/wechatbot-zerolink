@@ -89,6 +89,7 @@ export class HttpClient {
     baseUrl: string,
     path: string,
     headers?: Record<string, string>,
+    options?: { signal?: AbortSignal },
   ): Promise<T> {
     const url = new URL(path, normalizeBaseUrl(baseUrl)).toString()
     const response = await this.request<T>({
@@ -96,6 +97,7 @@ export class HttpClient {
       url,
       headers,
       timeoutMs: 15_000,
+      signal: options?.signal,
     })
     return response.data
   }

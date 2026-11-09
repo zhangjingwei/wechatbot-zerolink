@@ -200,6 +200,7 @@ export interface QrStatusResponse {
     | 'scaned_but_redirect'
     | 'binded_redirect'
     | 'need_verifycode'
+    | 'confirmed_but_need_verifycode'
     | 'verify_code_blocked'
   bot_token?: string
   ilink_bot_id?: string
