@@ -20,6 +20,8 @@ type PollerEventMap = {
  * Handles cursor management, exponential backoff, and session expiry detection.
  */
 export class MessagePoller extends TypedEmitter<PollerEventMap> {
+  /** Persist the incoming batch before acknowledging its cursor. */
+  beforeCheckpoint?: (messages: WireMessage[]) => void | Promise<void>
   private cursor = ''
   private stopped = true
   private pollController: AbortController | null = null
@@ -68,11 +70,12 @@ export class MessagePoller extends TypedEmitter<PollerEventMap> {
         )
         this.pollController = null
 
-        // Update cursor
+        await this.beforeCheckpoint?.(updates.msgs ?? [])
+
+        // Persist before advancing the in-memory cursor, so a failed write can replay.
         if (updates.get_updates_buf) {
+          await this.storage.set(STORAGE_KEYS.CURSOR, updates.get_updates_buf)
           this.cursor = updates.get_updates_buf
-          // Persist cursor asynchronously — don't block the poll loop
-          this.storage.set(STORAGE_KEYS.CURSOR, this.cursor).catch(() => {})
         }
 
         retryDelayMs = 1_000
@@ -90,7 +93,7 @@ export class MessagePoller extends TypedEmitter<PollerEventMap> {
 
         if (error instanceof ApiError && error.isSessionExpired) {
           this.logger.warn('Session expired — emitting session:expired')
-          this.emit('session:expired')
+          await this.emitAsync('session:expired')
           // Pause until the client handles re-login
           await delay(2_000)
           continue

@@ -1,6 +1,6 @@
 {
-  "name": "@wechatbot/wechatbot",
-  "version": "2.2.0",
+  "name": "wechatbot-zerolink",
+  "version": "2.2.0-zerolink.2",
   "description": "WeChat iLink Bot SDK — modular, extensible, production-grade",
   "type": "module",
   "exports": {
@@ -17,6 +17,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "node --experimental-vm-modules node_modules/.bin/vitest run",
+    "test:binding-contract": "node --experimental-vm-modules node_modules/.bin/vitest run tests/binding-contract.test.ts",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/vitest",
     "lint": "tsc --noEmit",
     "prepublishOnly": "npm run build"
@@ -27,7 +28,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zhangjingwei/wechatbot-zerolink.git"
+    "url": "git+https://github.com/zhangjingwei/wechatbot-zerolink.git",
+    "directory": "nodejs"
   },
   "license": "MIT",
   "devDependencies": {

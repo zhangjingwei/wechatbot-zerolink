@@ -45,12 +45,25 @@ export class ILinkApi {
    * the server can answer `binded_redirect` for an already-bound bot instead
    * of issuing a duplicate session.
    */
-  async getQrCode(baseUrl: string, localTokenList: string[] = []): Promise<QrCodeResponse> {
+  async getQrCode(
+    baseUrl: string,
+    localTokenList: string[] = [],
+    options: { verifyPin?: boolean; botSpamTicket?: string; signal?: AbortSignal } = {},
+  ): Promise<QrCodeResponse> {
+    if (options.botSpamTicket && !/^[0-9a-fA-F]{32}$/.test(options.botSpamTicket)) {
+      throw new Error('Invalid bot_spam_ticket')
+    }
+    const body: Record<string, unknown> = { local_token_list: localTokenList }
+    if (options.verifyPin) {
+      body.bot_spam_business_data = Buffer.from(JSON.stringify({ verify_pin: 1 })).toString('base64')
+    }
+    if (options.botSpamTicket) body.bot_spam_ticket = options.botSpamTicket
     return this.http.apiPost<QrCodeResponse>(
       baseUrl,
       '/ilink/bot/get_bot_qrcode?bot_type=3',
-      { local_token_list: localTokenList },
+      body,
       buildCommonHeaders(),
+      { signal: options.signal },
     )
   }
 
@@ -63,12 +76,13 @@ export class ILinkApi {
     baseUrl: string,
     qrcode: string,
     verifyCode?: string,
+    signal?: AbortSignal,
   ): Promise<QrStatusResponse> {
     let path = `/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`
     if (verifyCode) {
       path += `&verify_code=${encodeURIComponent(verifyCode)}`
     }
-    return this.http.apiGet<QrStatusResponse>(baseUrl, path, buildCommonHeaders())
+    return this.http.apiGet<QrStatusResponse>(baseUrl, path, buildCommonHeaders(), { signal })
   }
 
   // ── Messages ──────────────────────────────────────────────────────────

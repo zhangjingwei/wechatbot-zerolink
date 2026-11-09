@@ -30,6 +30,8 @@ export interface UploadOptions {
   userId: string
   /** Media type for the upload */
   mediaType: MediaType
+  /** Timeout for each CDN upload attempt in milliseconds. */
+  timeoutMs?: number
 }
 
 /**
@@ -44,6 +46,7 @@ export class MediaUploader {
     private readonly api: ILinkApi,
     private readonly cdnBaseUrl: string = CDN_BASE_URL,
     logger: Logger,
+    private readonly timeoutMs?: number,
   ) {
     this.logger = logger.child('upload')
   }
@@ -54,6 +57,11 @@ export class MediaUploader {
     options: UploadOptions,
   ): Promise<UploadResult> {
     const { data, userId, mediaType } = options
+    const timeoutMs = options.timeoutMs ?? this.timeoutMs
+      ?? Number(process.env.WECHAT_CDN_UPLOAD_TIMEOUT_MS ?? 300_000)
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 600_000) {
+      throw new RangeError('Upload timeout must be an integer between 1000 and 600000 ms')
+    }
 
     // 1. Generate AES key and encrypt
     const aesKey = generateAesKey()
@@ -100,7 +108,7 @@ export class MediaUploader {
           method: 'POST',
           headers: { 'Content-Type': 'application/octet-stream' },
           body: new Uint8Array(ciphertext),
-          signal: AbortSignal.timeout(60_000),
+          signal: AbortSignal.timeout(timeoutMs),
         })
 
         if (response.status >= 400 && response.status < 500) {

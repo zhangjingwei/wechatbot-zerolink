@@ -29,7 +29,7 @@ jobs:
     # Named environment so publishes show up under GitHub → Deployments
     environment:
       name: npm
-      url: https://www.npmjs.com/package/@wechatbot/wechatbot
+      url: https://www.npmjs.com/package/wechatbot-zerolink
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run tests
         run: npm test

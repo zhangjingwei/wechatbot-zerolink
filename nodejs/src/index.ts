@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════
-// @wechatbot/wechatbot — WeChat iLink Bot SDK
+// wechatbot-zerolink — WeChat iLink Bot SDK
 //
 // A modular, extensible, production-grade SDK for building WeChat bots.
 //
@@ -9,7 +9,7 @@
 //                        Middleware Chain
 //
 // Quick start:
-//   import { WeChatBot } from '@wechatbot/wechatbot'
+//   import { WeChatBot } from 'wechatbot-zerolink'
 //
 //   const bot = new WeChatBot()
 //   await bot.login()
@@ -32,7 +32,7 @@ export {
 } from './core/errors.js'
 
 // ── Auth ────────────────────────────────────────────────────────────────
-export type { Credentials, QrLoginCallbacks } from './auth/types.js'
+export type { Credentials, LoginOptions, QrLoginCallbacks, RealnameClient, RealnameTicket } from './auth/types.js'
 
 // ── Message ─────────────────────────────────────────────────────────────
 export { MessageBuilder } from './message/builder.js'

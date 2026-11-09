@@ -1,19 +1,21 @@
 # WeChatBot ZeroLink
 
-A Node.js SDK for the WeChat iLink Bot API. Source code, examples, and tests are in [`nodejs/`](nodejs/).
+An independent Node.js SDK for the WeChat iLink Bot API. Source code, examples, and tests are in [`nodejs/`](nodejs/). This repository is based on the upstream `corespeed-io/wechatbot` `node-v2.2.0` release and now maintains only the Node.js implementation.
+
+The repository root declares package name `wechatbot-zerolink` and version `2.2.0-zerolink.2`. See the [protocol audit](docs/protocol-compatibility-3.0.0-beta-0.md) for this branch's WeChat 3.0.0 beta binding support. The package has not been published to npm.
 
 ## Build and test
 
-The current `nodejs/package.json` declares package name `@wechatbot/wechatbot` and version `2.2.0`. To use this repository's source:
+Requires Node.js 22 or later.
 
 ```sh
 cd nodejs
-npm install
+npm ci
 npm run build
 npm test
 ```
 
-Requires Node.js 22 or later. See the [Node.js documentation](nodejs/README.md) for usage, API details, and examples.
+See the [Node.js documentation](nodejs/README.md) for usage, API details, and examples.
 
 ## Repository layout
 
@@ -22,7 +24,7 @@ Requires Node.js 22 or later. See the [Node.js documentation](nodejs/README.md) 
 - `nodejs/examples/`: examples
 - `docs/`: protocol and architecture notes
 
-The repository retains Node.js CI and npm publishing workflows. The package metadata in [`nodejs/package.json`](nodejs/package.json) is authoritative for publishing.
+The repository retains Node.js CI and an npm publishing workflow. Check its package name and target registry before publishing.
 
 ## License
 

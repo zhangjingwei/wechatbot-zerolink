@@ -1,7 +1,7 @@
 import { TypedEmitter, type BotEventMap } from './events.js'
 import { NoContextError } from './errors.js'
 
-import { Authenticator, type Credentials, type QrLoginCallbacks } from '../auth/index.js'
+import { Authenticator, type Credentials, type LoginOptions, type QrLoginCallbacks, type RealnameClient } from '../auth/index.js'
 import { createLogger, type Logger, type LogLevel } from '../logger/index.js'
 import {
   MediaDownloader,
@@ -38,12 +38,18 @@ export interface WeChatBotOptions {
   logger?: Logger
   /** QR login callbacks (for rendering QR codes, etc.) */
   loginCallbacks?: QrLoginCallbacks
+  /** Defaults for re-login after restart, including the owner mode. */
+  loginOptions?: Pick<LoginOptions, 'bindOwner' | 'verifyPin'>
+  /** Optional real-name authorization transport for nonstandard hosts or tests. */
+  realnameClient?: RealnameClient
   /**
    * UA-style identifier of the app driving this bot, sent as `base_info.bot_agent`
    * on every API request (e.g. "MyApp/1.2 (prod)"). Invalid values fall back to
    * "WeChatBot/<version>".
    */
   botAgent?: string
+  /** Timeout for each CDN upload attempt in milliseconds. */
+  uploadTimeoutMs?: number
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -137,6 +143,9 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
   private readonly http: HttpClient
   private readonly api: ILinkApi
   private readonly auth: Authenticator
+  private readonly loginCallbacks?: QrLoginCallbacks
+  private readonly defaultLoginOptions?: Pick<LoginOptions, 'bindOwner' | 'verifyPin'>
+  private lastLoginOptions?: LoginOptions
   private readonly parser: MessageParser
   private readonly middleware: MiddlewareEngine
   private readonly contextStore: ContextStore
@@ -157,18 +166,20 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL
     this.logger = options.logger ?? createLogger({ level: options.logLevel ?? 'info' })
     this.storage = resolveStorage(options)
+    this.loginCallbacks = options.loginCallbacks
+    this.defaultLoginOptions = options.loginOptions
 
     // Build the layered architecture
     this.http = new HttpClient({ logger: this.logger })
     this.api = new ILinkApi(this.http, options.botAgent)
-    this.auth = new Authenticator(this.api, this.storage, this.logger)
+    this.auth = new Authenticator(this.api, this.storage, this.logger, options.realnameClient)
     this.parser = new MessageParser()
     this.middleware = new MiddlewareEngine()
     this.contextStore = new ContextStore(this.storage, this.logger)
     this.poller = new MessagePoller(this.api, this.storage, this.logger)
     this.sender = new MessageSender(this.api, this.contextStore, this.logger)
     this.typing = new TypingService(this.api, this.contextStore, this.logger)
-    this.uploader = new MediaUploader(this.api, undefined, this.logger)
+    this.uploader = new MediaUploader(this.api, undefined, this.logger, options.uploadTimeoutMs)
     this.downloader = new MediaDownloader(undefined, this.logger)
 
     // Wire up internal events
@@ -182,13 +193,18 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
   /**
    * Login to WeChat. Uses stored credentials if available, otherwise starts QR flow.
    */
-  async login(options: { force?: boolean; callbacks?: QrLoginCallbacks } = {}): Promise<Credentials> {
+  async login(options: LoginOptions = {}): Promise<Credentials> {
+    const effective = { ...this.defaultLoginOptions, ...this.lastLoginOptions, ...options }
     const creds = await this.auth.login({
-      force: options.force,
+      force: effective.force,
       baseUrl: this.baseUrl,
-      callbacks: options.callbacks,
+      callbacks: effective.callbacks ?? this.loginCallbacks,
+      bindOwner: effective.bindOwner,
+      verifyPin: effective.verifyPin,
+      signal: effective.signal,
     })
 
+    this.lastLoginOptions = { ...effective, force: undefined, signal: undefined }
     this.setCredentials(creds)
     this.emit('login', creds)
     return creds
@@ -267,17 +283,18 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
    *   // From URL (auto-download, auto-detect type)
    *   await bot.reply(msg, { url: 'https://example.com/image.jpg' })
    */
-  async reply(message: IncomingMessage, content: SendContent): Promise<void> {
+  async reply(message: IncomingMessage, content: SendContent): Promise<Record<string, unknown> | Record<string, unknown>[]> {
     const creds = this.requireCredentials()
     this.contextStore.set(message.userId, message._contextToken)
 
-    await this.sendContent(
+    const results = await this.sendContent(
       message.userId,
       message._contextToken,
       content,
     )
 
     this.typing.stopTyping(creds.baseUrl, creds.token, message.userId).catch(() => {})
+    return results
   }
 
   /**
@@ -292,18 +309,18 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
    *   await bot.send(userId, { file: data, fileName: 'doc.pdf' })
    *   await bot.send(userId, { url: 'https://example.com/img.png' })
    */
-  async send(userId: string, content: SendContent): Promise<void> {
+  async send(userId: string, content: SendContent): Promise<Record<string, unknown> | Record<string, unknown>[]> {
     const ctx = this.contextStore.get(userId)
     if (!ctx) throw new NoContextError(userId)
-    await this.sendContent(userId, ctx, content)
+    return this.sendContent(userId, ctx, content)
   }
 
   /**
    * Send a pre-built message payload (advanced use with MessageBuilder).
    */
-  async sendRaw(payload: ReturnType<MessageBuilder['build']>): Promise<void> {
+  async sendRaw(payload: ReturnType<MessageBuilder['build']>): Promise<Record<string, unknown>> {
     const creds = this.requireCredentials()
-    await this.sender.sendRaw(creds.baseUrl, creds.token, payload)
+    return this.sender.sendRaw(creds.baseUrl, creds.token, payload)
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -447,7 +464,7 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
    * Convenience method: login + start in one call.
    * Equivalent to `await bot.login(); await bot.start()`.
    */
-  async run(options?: { force?: boolean; callbacks?: QrLoginCallbacks }): Promise<void> {
+  async run(options?: LoginOptions): Promise<void> {
     await this.login(options)
     await this.start()
   }
@@ -488,19 +505,17 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
     userId: string,
     contextToken: string,
     content: SendContent,
-  ): Promise<void> {
+  ): Promise<Record<string, unknown> | Record<string, unknown>[]> {
     const creds = this.requireCredentials()
 
     // String shorthand → text
     if (typeof content === 'string') {
-      await this.sender.sendText(creds.baseUrl, creds.token, userId, content, contextToken)
-      return
+      return this.sender.sendText(creds.baseUrl, creds.token, userId, content, contextToken)
     }
 
     // { text }
     if ('text' in content) {
-      await this.sender.sendText(creds.baseUrl, creds.token, userId, content.text, contextToken)
-      return
+      return this.sender.sendText(creds.baseUrl, creds.token, userId, content.text, contextToken)
     }
 
     // { url } → download then re-route
@@ -516,18 +531,16 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
 
     // { image }
     if ('image' in content) {
-      await this.sendMediaBuffer(creds, userId, contextToken, content.image, MediaType.IMAGE, (builder, result) => {
+      return this.sendMediaBuffer(creds, userId, contextToken, content.image, MediaType.IMAGE, (builder, result) => {
         builder.image({ media: result.media, midSize: result.encryptedFileSize })
       }, content.caption)
-      return
     }
 
     // { video }
     if ('video' in content) {
-      await this.sendMediaBuffer(creds, userId, contextToken, content.video, MediaType.VIDEO, (builder, result) => {
+      return this.sendMediaBuffer(creds, userId, contextToken, content.video, MediaType.VIDEO, (builder, result) => {
         builder.video({ media: result.media, videoSize: result.encryptedFileSize })
       }, content.caption)
-      return
     }
 
     // { file, fileName } — auto-route by extension
@@ -553,11 +566,11 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
       if (content.caption) {
         await this.sender.sendText(creds.baseUrl, creds.token, userId, content.caption, contextToken)
       }
-      await this.sendMediaBuffer(creds, userId, contextToken, content.file, MediaType.FILE, (builder, result) => {
+      return this.sendMediaBuffer(creds, userId, contextToken, content.file, MediaType.FILE, (builder, result) => {
         builder.file({ media: result.media, fileName: content.fileName, size: content.file.length })
       })
-      return
     }
+    throw new Error('Unsupported send content')
   }
 
   /**
@@ -571,7 +584,7 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
     mediaType: MediaType,
     buildItem: (builder: MessageBuilder, result: UploadResult) => void,
     caption?: string,
-  ): Promise<void> {
+  ): Promise<Record<string, unknown>> {
     const result = await this.uploader.upload(creds.baseUrl, creds.token, {
       data,
       userId,
@@ -581,9 +594,10 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
     const builder = MessageBuilder.to(userId, contextToken)
     if (caption) builder.text(caption)
     buildItem(builder, result)
-    await this.sender.sendRaw(creds.baseUrl, creds.token, builder.build())
+    const sent = await this.sender.sendRaw(creds.baseUrl, creds.token, builder.build())
 
     this.logger.info('Sent media', { userId, mediaType, size: data.length })
+    return sent
   }
 
   // ═══════════════════════════════════════════════════════════════════

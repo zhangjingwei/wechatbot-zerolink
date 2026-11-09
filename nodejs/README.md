@@ -1,19 +1,17 @@
-# @wechatbot/wechatbot — Node.js SDK
+# wechatbot-zerolink — Node.js SDK
 
-WeChat iLink Bot SDK for Node.js — modular, extensible, production-grade.
+An independent Node.js fork of `@wechatbot/wechatbot` 2.2.0, adding the binding protocol observed in `@tencent-weixin/openclaw-weixin` 3.0.0-beta-0. The fork retains the upstream MIT license and attribution. It is not an official Tencent package.
 
 ## Install
 
-```bash
-npm install @wechatbot/wechatbot
-```
+The package has not been published to npm. Install a pinned Git commit with `npm install 'git+https://github.com/zhangjingwei/wechatbot-zerolink.git#<commit>'`, or use a generated `.tgz` artifact. The repository root packages the Node.js SDK from `nodejs/` for Git installation.
 
 Requires Node.js >= 22 (for native fetch). Zero runtime dependencies.
 
 ## Quick Start
 
 ```typescript
-import { WeChatBot } from '@wechatbot/wechatbot'
+import { WeChatBot } from 'wechatbot-zerolink'
 
 const bot = new WeChatBot()
 await bot.login()
@@ -25,6 +23,38 @@ bot.onMessage(async (msg) => {
 
 await bot.start()
 ```
+
+## 3.0.0-beta-0 binding support
+
+Existing `bot.login()` keeps the 2.2.0 wire request. For a Bot owned by someone else, supply an authorization QR callback; the SDK waits for approval before requesting the Bot QR:
+
+```typescript
+const bot = new WeChatBot({
+  storage: 'file',
+  loginOptions: { bindOwner: 'other', verifyPin: true },
+  loginCallbacks: {
+    onRealnameQrUrl: (url) => showQr(url),
+    onRealnameStatus: (status) => showStatus(status),
+    onQrUrl: (url) => showQr(url),
+    onVerifyCode: async (isRetry) => await askForPin(isRetry),
+  },
+})
+await bot.login()
+```
+
+`bindOwner: 'self'` is the default. `verifyPin: false` omits the proactive PIN field, but a server PIN challenge is still handled. Both `need_verifycode` and `confirmed_but_need_verifycode` invoke `onVerifyCode`. `onRealnameQrUrl` is required in `other` mode so authorization does not proceed invisibly. For noninteractive services, provide `onVerifyCode` as well; otherwise the SDK reads stdin. `loginOptions` also supplies the owner mode after a process restart. A canceled login can use `bot.login({ signal })`.
+
+See the [protocol compatibility audit](https://github.com/zhangjingwei/wechatbot-zerolink/blob/feat/realname-pin-binding/docs/protocol-compatibility-3.0.0-beta-0.md) for implementation scope and live validation gaps.
+
+Run `npm run test:binding-contract` to exercise the complete binding request sequence against an in-process protocol mock. The command does not contact WeChat, scan a QR code, or start message polling.
+
+## Weixin Link runtime contracts
+
+The SDK now preserves numeric message IDs as exact strings, awaits `beforeCheckpoint(messages)` before durably storing the poll cursor, and persists the cursor before updating its in-memory value. A failed intake or cursor write therefore leaves the batch eligible for replay. Session-expired listeners are awaited before the next poll. `sendmessage` is never retried by the HTTP client because a timed-out submission may already have been accepted.
+
+Text send calls return an array of API responses, one per chunk. Raw and media sends return the corresponding API response. File storage writes JSON through an exclusive temporary file, syncs it, renames it, and syncs the directory. The upload deadline is configurable with `new WeChatBot({ uploadTimeoutMs: 300_000 })`, per `bot.upload({ ..., timeoutMs })`, or through the legacy `WECHAT_CDN_UPLOAD_TIMEOUT_MS` environment variable. The default is 300 seconds; the allowed range is 1,000 to 600,000 milliseconds.
+
+These contracts are covered by local tests. Live WeChat delivery, pairing, CDN behavior and restart recovery require separate acceptance testing by the consuming service.
 
 ## Architecture
 
@@ -183,7 +213,7 @@ interface Storage {
 ```bash
 npm install
 npm run build    # TypeScript → dist/
-npm test         # 69 unit tests
+npm test         # unit and runtime contract tests
 npm run lint     # Type check
 ```
 
