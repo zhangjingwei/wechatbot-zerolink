@@ -1,0 +1,20 @@
+{
+  "name": "wechatbot-zerolink",
+  "version": "2.2.0-zerolink.1",
+  "description": "Independent iLink Bot SDK for Weixin Link",
+  "type": "module",
+  "exports": {
+    ".": "./nodejs/dist/index.js",
+    "./media": "./nodejs/dist/media/index.js",
+    "./middleware": "./nodejs/dist/middleware/index.js",
+    "./storage": "./nodejs/dist/storage/index.js"
+  },
+  "types": "./nodejs/dist/index.d.ts",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "prepare": "npm --prefix nodejs ci && npm --prefix nodejs run build"
+  },
+  "files": ["nodejs/dist", "nodejs/package.json", "nodejs/README.md"],
+  "repository": "git+https://github.com/zhangjingwei/wechatbot-zerolink.git",
+  "license": "MIT"
+}

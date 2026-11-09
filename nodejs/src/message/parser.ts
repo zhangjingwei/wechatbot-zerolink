@@ -135,8 +135,12 @@ function extractText(items: WireMessageItem[]): string {
   return parts.join('\n')
 }
 
-function parseRefMessage(ref: { title?: string; message_item?: WireMessageItem }): QuotedMessage {
-  const result: QuotedMessage = { title: ref.title }
+function parseRefMessage(ref: { title?: string; svr_id?: number | string; partial_text?: Record<string, unknown>; message_item?: WireMessageItem }): QuotedMessage {
+  const result: QuotedMessage = {
+    title: ref.title,
+    messageId: ref.svr_id === undefined ? undefined : String(ref.svr_id),
+    partialText: ref.partial_text,
+  }
 
   if (ref.message_item) {
     result.type = detectPrimaryType([ref.message_item])

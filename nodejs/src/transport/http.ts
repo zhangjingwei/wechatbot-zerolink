@@ -33,19 +33,22 @@ export class HttpClient {
    */
   async request<T>(options: HttpRequestOptions): Promise<HttpResponse<T>> {
     let lastError: unknown
+    // Retrying an uncertain send can deliver the same message twice.
+    const maxRetries = new URL(options.url).pathname === '/ilink/bot/sendmessage'
+      ? 0 : this.retryPolicy.maxRetries
 
-    for (let attempt = 0; attempt <= this.retryPolicy.maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await this.executeRequest<T>(options)
       } catch (error) {
         lastError = error
 
-        if (attempt < this.retryPolicy.maxRetries && this.retryPolicy.isRetryable(error)) {
+        if (attempt < maxRetries && this.retryPolicy.isRetryable(error)) {
           const delay = Math.min(
             this.retryPolicy.baseDelayMs * 2 ** attempt,
             this.retryPolicy.maxDelayMs,
           )
-          this.logger.debug(`Retry ${attempt + 1}/${this.retryPolicy.maxRetries} in ${delay}ms`, {
+          this.logger.debug(`Retry ${attempt + 1}/${maxRetries} in ${delay}ms`, {
             url: options.url,
           })
           await sleep(delay)
@@ -125,7 +128,12 @@ export class HttpClient {
     }
 
     const text = await response.text()
-    const data = text ? (JSON.parse(text) as Record<string, unknown>) : {}
+    const data = text ? (JSON.parse(text, (key: string, value: unknown, context?: { source?: string }) => {
+      if (!['message_id', 'msg_id', 'svr_id'].includes(key) || typeof value !== 'number') return value
+      if (context?.source) return context.source
+      if (Number.isSafeInteger(value)) return String(value)
+      throw new SyntaxError(`Cannot decode ${key} without lossless JSON number support`)
+    }) as Record<string, unknown>) : {}
 
     // Check HTTP status
     if (!response.ok) {

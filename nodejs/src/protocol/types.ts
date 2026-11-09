@@ -113,6 +113,8 @@ export interface VideoItem {
 
 export interface RefMessage {
   title?: string
+  svr_id?: number | string
+  partial_text?: Record<string, unknown>
   message_item?: WireMessageItem
 }
 
@@ -128,7 +130,7 @@ export interface WireMessageItem {
 
 export interface WireMessage {
   seq?: number
-  message_id?: number
+  message_id?: number | string
   from_user_id: string
   to_user_id: string
   client_id: string

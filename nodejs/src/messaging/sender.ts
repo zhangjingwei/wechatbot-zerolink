@@ -31,7 +31,7 @@ export class MessageSender {
     userId: string,
     text: string,
     contextToken?: string,
-  ): Promise<void> {
+  ): Promise<Record<string, unknown>[]> {
     const ctx = contextToken ?? this.contextStore.get(userId)
     if (!ctx) throw new NoContextError(userId)
 
@@ -40,15 +40,17 @@ export class MessageSender {
     }
 
     const chunks = chunkText(text, MAX_TEXT_LENGTH)
+    const results: Record<string, unknown>[] = []
     for (const chunk of chunks) {
       const msg = this.api.buildTextMessagePayload(userId, ctx, chunk)
-      await this.api.sendMessage(baseUrl, token, msg)
+      results.push(await this.api.sendMessage(baseUrl, token, msg))
     }
 
     this.logger.debug(`Sent text to ${userId}`, {
       length: text.length,
       chunks: chunks.length,
     })
+    return results
   }
 
   /**
@@ -58,9 +60,10 @@ export class MessageSender {
     baseUrl: string,
     token: string,
     msg: SendMessageRequest['msg'],
-  ): Promise<void> {
-    await this.api.sendMessage(baseUrl, token, msg)
+  ): Promise<Record<string, unknown>> {
+    const result = await this.api.sendMessage(baseUrl, token, msg)
     this.logger.debug(`Sent raw message to ${msg.to_user_id}`)
+    return result
   }
 
   /**
@@ -72,13 +75,14 @@ export class MessageSender {
     userId: string,
     items: WireMessageItem[],
     contextToken?: string,
-  ): Promise<void> {
+  ): Promise<Record<string, unknown>> {
     const ctx = contextToken ?? this.contextStore.get(userId)
     if (!ctx) throw new NoContextError(userId)
 
     const msg = this.api.buildMediaMessagePayload(userId, ctx, items)
-    await this.api.sendMessage(baseUrl, token, msg)
+    const result = await this.api.sendMessage(baseUrl, token, msg)
     this.logger.debug(`Sent media to ${userId}`, { itemCount: items.length })
+    return result
   }
 }
 

@@ -68,6 +68,8 @@ export interface VideoContent {
 
 export interface QuotedMessage {
   title?: string
+  messageId?: string
+  partialText?: Record<string, unknown>
   text?: string
   type?: MessageContentType
 }

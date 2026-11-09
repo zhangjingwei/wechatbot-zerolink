@@ -4,7 +4,7 @@ An independent Node.js fork of `@wechatbot/wechatbot` 2.2.0, adding the binding 
 
 ## Install
 
-The package has been built locally but is not yet published to npm. Install the generated `.tgz` artifact with `npm install /path/to/wechatbot-zerolink-2.2.0-zerolink.1.tgz`. Once published, the command will be `npm install wechatbot-zerolink`.
+The package has not been published to npm. Install a pinned Git commit with `npm install 'git+https://github.com/zhangjingwei/wechatbot-zerolink.git#<commit>'`, or use a generated `.tgz` artifact. The repository root packages the Node.js SDK from `nodejs/` for Git installation.
 
 Requires Node.js >= 22 (for native fetch). Zero runtime dependencies.
 
@@ -47,6 +47,14 @@ await bot.login()
 See the [protocol compatibility audit](https://github.com/zhangjingwei/wechatbot-zerolink/blob/feat/realname-pin-binding/docs/protocol-compatibility-3.0.0-beta-0.md) for implementation scope and live validation gaps.
 
 Run `npm run test:binding-contract` to exercise the complete binding request sequence against an in-process protocol mock. The command does not contact WeChat, scan a QR code, or start message polling.
+
+## Weixin Link runtime contracts
+
+The SDK now preserves numeric message IDs as exact strings, awaits `beforeCheckpoint(messages)` before durably storing the poll cursor, and persists the cursor before updating its in-memory value. A failed intake or cursor write therefore leaves the batch eligible for replay. Session-expired listeners are awaited before the next poll. `sendmessage` is never retried by the HTTP client because a timed-out submission may already have been accepted.
+
+Text send calls return an array of API responses, one per chunk. Raw and media sends return the corresponding API response. File storage writes JSON through an exclusive temporary file, syncs it, renames it, and syncs the directory. The upload deadline is configurable with `new WeChatBot({ uploadTimeoutMs: 300_000 })` or per `bot.upload({ ..., timeoutMs })`; the SDK default remains 60 seconds. The allowed range is 1,000 to 600,000 milliseconds.
+
+These contracts are covered by local tests. Live WeChat delivery, pairing, CDN behavior and restart recovery require separate acceptance testing by the consuming service.
 
 ## Architecture
 
@@ -205,7 +213,7 @@ interface Storage {
 ```bash
 npm install
 npm run build    # TypeScript → dist/
-npm test         # 69 unit tests
+npm test         # unit and runtime contract tests
 npm run lint     # Type check
 ```
 

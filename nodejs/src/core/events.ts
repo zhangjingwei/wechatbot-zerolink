@@ -71,6 +71,13 @@ export class TypedEmitter<EventMap extends { [K: string]: unknown[] } = { [K: st
     }
   }
 
+  /** Await listeners when an event is part of a state transition. */
+  async emitAsync<K extends keyof EventMap>(event: K, ...args: EventMap[K]): Promise<void> {
+    const set = this.listeners.get(event)
+    if (!set) return
+    await Promise.all([...set].map((listener) => listener(...args)))
+  }
+
   removeAllListeners(event?: keyof EventMap): this {
     if (event) {
       this.listeners.delete(event)

@@ -48,6 +48,8 @@ export interface WeChatBotOptions {
    * "WeChatBot/<version>".
    */
   botAgent?: string
+  /** Timeout for each CDN upload attempt in milliseconds. */
+  uploadTimeoutMs?: number
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -177,7 +179,7 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
     this.poller = new MessagePoller(this.api, this.storage, this.logger)
     this.sender = new MessageSender(this.api, this.contextStore, this.logger)
     this.typing = new TypingService(this.api, this.contextStore, this.logger)
-    this.uploader = new MediaUploader(this.api, undefined, this.logger)
+    this.uploader = new MediaUploader(this.api, undefined, this.logger, options.uploadTimeoutMs)
     this.downloader = new MediaDownloader(undefined, this.logger)
 
     // Wire up internal events
@@ -281,17 +283,18 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
    *   // From URL (auto-download, auto-detect type)
    *   await bot.reply(msg, { url: 'https://example.com/image.jpg' })
    */
-  async reply(message: IncomingMessage, content: SendContent): Promise<void> {
+  async reply(message: IncomingMessage, content: SendContent): Promise<Record<string, unknown> | Record<string, unknown>[]> {
     const creds = this.requireCredentials()
     this.contextStore.set(message.userId, message._contextToken)
 
-    await this.sendContent(
+    const results = await this.sendContent(
       message.userId,
       message._contextToken,
       content,
     )
 
     this.typing.stopTyping(creds.baseUrl, creds.token, message.userId).catch(() => {})
+    return results
   }
 
   /**
@@ -306,18 +309,18 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
    *   await bot.send(userId, { file: data, fileName: 'doc.pdf' })
    *   await bot.send(userId, { url: 'https://example.com/img.png' })
    */
-  async send(userId: string, content: SendContent): Promise<void> {
+  async send(userId: string, content: SendContent): Promise<Record<string, unknown> | Record<string, unknown>[]> {
     const ctx = this.contextStore.get(userId)
     if (!ctx) throw new NoContextError(userId)
-    await this.sendContent(userId, ctx, content)
+    return this.sendContent(userId, ctx, content)
   }
 
   /**
    * Send a pre-built message payload (advanced use with MessageBuilder).
    */
-  async sendRaw(payload: ReturnType<MessageBuilder['build']>): Promise<void> {
+  async sendRaw(payload: ReturnType<MessageBuilder['build']>): Promise<Record<string, unknown>> {
     const creds = this.requireCredentials()
-    await this.sender.sendRaw(creds.baseUrl, creds.token, payload)
+    return this.sender.sendRaw(creds.baseUrl, creds.token, payload)
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -502,19 +505,17 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
     userId: string,
     contextToken: string,
     content: SendContent,
-  ): Promise<void> {
+  ): Promise<Record<string, unknown> | Record<string, unknown>[]> {
     const creds = this.requireCredentials()
 
     // String shorthand → text
     if (typeof content === 'string') {
-      await this.sender.sendText(creds.baseUrl, creds.token, userId, content, contextToken)
-      return
+      return this.sender.sendText(creds.baseUrl, creds.token, userId, content, contextToken)
     }
 
     // { text }
     if ('text' in content) {
-      await this.sender.sendText(creds.baseUrl, creds.token, userId, content.text, contextToken)
-      return
+      return this.sender.sendText(creds.baseUrl, creds.token, userId, content.text, contextToken)
     }
 
     // { url } → download then re-route
@@ -530,18 +531,16 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
 
     // { image }
     if ('image' in content) {
-      await this.sendMediaBuffer(creds, userId, contextToken, content.image, MediaType.IMAGE, (builder, result) => {
+      return this.sendMediaBuffer(creds, userId, contextToken, content.image, MediaType.IMAGE, (builder, result) => {
         builder.image({ media: result.media, midSize: result.encryptedFileSize })
       }, content.caption)
-      return
     }
 
     // { video }
     if ('video' in content) {
-      await this.sendMediaBuffer(creds, userId, contextToken, content.video, MediaType.VIDEO, (builder, result) => {
+      return this.sendMediaBuffer(creds, userId, contextToken, content.video, MediaType.VIDEO, (builder, result) => {
         builder.video({ media: result.media, videoSize: result.encryptedFileSize })
       }, content.caption)
-      return
     }
 
     // { file, fileName } — auto-route by extension
@@ -567,11 +566,11 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
       if (content.caption) {
         await this.sender.sendText(creds.baseUrl, creds.token, userId, content.caption, contextToken)
       }
-      await this.sendMediaBuffer(creds, userId, contextToken, content.file, MediaType.FILE, (builder, result) => {
+      return this.sendMediaBuffer(creds, userId, contextToken, content.file, MediaType.FILE, (builder, result) => {
         builder.file({ media: result.media, fileName: content.fileName, size: content.file.length })
       })
-      return
     }
+    throw new Error('Unsupported send content')
   }
 
   /**
@@ -585,7 +584,7 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
     mediaType: MediaType,
     buildItem: (builder: MessageBuilder, result: UploadResult) => void,
     caption?: string,
-  ): Promise<void> {
+  ): Promise<Record<string, unknown>> {
     const result = await this.uploader.upload(creds.baseUrl, creds.token, {
       data,
       userId,
@@ -595,9 +594,10 @@ export class WeChatBot extends TypedEmitter<BotEventMap> {
     const builder = MessageBuilder.to(userId, contextToken)
     if (caption) builder.text(caption)
     buildItem(builder, result)
-    await this.sender.sendRaw(creds.baseUrl, creds.token, builder.build())
+    const sent = await this.sender.sendRaw(creds.baseUrl, creds.token, builder.build())
 
     this.logger.info('Sent media', { userId, mediaType, size: data.length })
+    return sent
   }
 
   // ═══════════════════════════════════════════════════════════════════

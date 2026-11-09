@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile, rm, readdir } from 'node:fs/promises'
+import { mkdir, readFile, rm, readdir, open, rename } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import os from 'node:os'
 import type { Storage } from './interface.js'
@@ -28,9 +29,25 @@ export class FileStorage implements Storage {
 
   async set<T>(key: string, value: T): Promise<void> {
     await this.ensureDir()
-    await writeFile(this.filePath(key), JSON.stringify(value, null, 2) + '\n', {
-      mode: 0o600,
-    })
+    const target = this.filePath(key)
+    const temporary = `${target}.${randomUUID()}.tmp`
+    try {
+      const file = await open(temporary, 'wx', 0o600)
+      try {
+        await file.writeFile(JSON.stringify(value, null, 2) + '\n')
+        await file.sync()
+      } finally {
+        await file.close()
+      }
+      await rename(temporary, target)
+      // Directory sync makes the rename durable on filesystems that support it.
+      if (process.platform !== 'win32') {
+        const directory = await open(this.dir, 'r')
+        try { await directory.sync() } finally { await directory.close() }
+      }
+    } finally {
+      await rm(temporary, { force: true })
+    }
   }
 
   async delete(key: string): Promise<void> {
