@@ -15,7 +15,7 @@
 
 [中文文档](README.md)
 
-Connect any agent to WeChat in 5 minutes. Inspired by [openclaw-weixin-cli](https://www.npmjs.com/package/@tencent-weixin/openclaw-weixin).
+Connect any agent to WeChat in 5 minutes. Inspired by [openclaw-weixin](https://github.com/Tencent/openclaw-weixin).
 
 ## 📦 SDKs
 
@@ -153,6 +153,34 @@ All SDKs share the following capabilities:
 | 📝 Structured Logging | Leveled, context-aware, pluggable transports |
 | 🏗️ Message Builder | `.text().image().file().build()` chaining API |
 
+## 👥 Multi-Tenant / Multi-Account
+
+Every bot instance is fully isolated (own HTTP client, events, message poller) with no global state and no local ports — one backend process can run many WeChat accounts side by side. The QR code is delivered via callback, so you can push it to a web frontend and let each user scan from their own page:
+
+```typescript
+// One instance per tenant, credentials isolated per tenant
+const bot = new WeChatBot({
+  storage: new PostgresStorage(pool, tenantId),  // or { storageDir: `/data/${tenantId}` }
+})
+
+await bot.login({
+  callbacks: {
+    onQrUrl: (url) => pushQrToWebUI(tenantId, url),  // render on that user's page
+    onScanned: () => notify(tenantId, 'Scanned — waiting for confirmation'),
+    onExpired: () => refreshQr(tenantId),
+  },
+})
+await bot.start()
+```
+
+Three things to watch:
+
+1. **Storage isolation** — each account needs its own `storageDir` or storage namespace; sharing one overwrites credentials.
+2. **One live instance per account** — only one poller per account across your whole fleet, or message cursors overwrite each other; use an advisory lock or lease table in multi-machine deployments.
+3. **Restart without rescanning** — credentials are persisted, so `login()` restores the session after a restart.
+
+Full example (including a custom PostgreSQL storage) in the [Node.js SDK docs](https://github.com/jiweiyuan/wechatbot-landing).
+
 ## 🏗 Architecture
 
 ```mermaid
@@ -209,6 +237,10 @@ wechatbot/
     ├── protocol.md        #   iLink API Protocol Spec
     └── architecture.md    #   Architecture & SDK Comparison
 ```
+
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=corespeed-io/wechatbot&type=Date)](https://star-history.com/#corespeed-io/wechatbot&Date)
 
 ## 📄 License
 
