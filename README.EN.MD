@@ -1,5 +1,7 @@
 # WeChatBot
 
+> This is the independent ZeroLink fork of upstream `corespeed-io/wechatbot`. Only the [Node.js package](nodejs/README.md) is extended here as `wechatbot-zerolink`; the other language trees and the installation commands below describe upstream releases. The fork has not been published to npm. See the [3.0.0-beta-0 binding protocol audit](docs/protocol-compatibility-3.0.0-beta-0.md).
+
 <p align="center">
   <strong>WeChat iLink Bot SDK for OpenClaw / AI Agent</strong><br/>
   <sub>Modular, production-grade, multi-language WeChat iLink Bot SDK</sub>
