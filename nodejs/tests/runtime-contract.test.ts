@@ -143,4 +143,19 @@ describe('media and quote compatibility', () => {
     expect(() => new MediaUploader(api, undefined, logger, 300_000)).not.toThrow()
     await expect(uploader.upload('https://example.com', 'token', { data: Buffer.from('x'), userId: 'user', mediaType: MediaType.FILE, timeoutMs: 999 })).rejects.toThrow(RangeError)
   })
+
+  it('keeps the legacy environment timeout when no explicit option is given', async () => {
+    const previous = process.env.WECHAT_CDN_UPLOAD_TIMEOUT_MS
+    process.env.WECHAT_CDN_UPLOAD_TIMEOUT_MS = '240000'
+    try {
+      const api = { getUploadUrl: vi.fn(async () => ({ upload_full_url: 'https://example.com/upload' })) } as unknown as ILinkApi
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { headers: { 'x-encrypted-param': 'encrypted' } }))
+      const timeout = vi.spyOn(AbortSignal, 'timeout')
+      await new MediaUploader(api, undefined, logger).upload('https://example.com', 'token', { data: Buffer.from('x'), userId: 'user', mediaType: MediaType.FILE })
+      expect(timeout).toHaveBeenCalledWith(240_000)
+    } finally {
+      if (previous === undefined) delete process.env.WECHAT_CDN_UPLOAD_TIMEOUT_MS
+      else process.env.WECHAT_CDN_UPLOAD_TIMEOUT_MS = previous
+    }
+  })
 })

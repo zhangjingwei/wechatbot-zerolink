@@ -1,6 +1,6 @@
 {
   "name": "wechatbot-zerolink",
-  "version": "2.2.0-zerolink.1",
+  "version": "2.2.0-zerolink.2",
   "description": "Independent iLink Bot SDK for Weixin Link",
   "type": "module",
   "exports": {

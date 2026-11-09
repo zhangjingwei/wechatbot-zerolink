@@ -52,7 +52,7 @@ Run `npm run test:binding-contract` to exercise the complete binding request seq
 
 The SDK now preserves numeric message IDs as exact strings, awaits `beforeCheckpoint(messages)` before durably storing the poll cursor, and persists the cursor before updating its in-memory value. A failed intake or cursor write therefore leaves the batch eligible for replay. Session-expired listeners are awaited before the next poll. `sendmessage` is never retried by the HTTP client because a timed-out submission may already have been accepted.
 
-Text send calls return an array of API responses, one per chunk. Raw and media sends return the corresponding API response. File storage writes JSON through an exclusive temporary file, syncs it, renames it, and syncs the directory. The upload deadline is configurable with `new WeChatBot({ uploadTimeoutMs: 300_000 })` or per `bot.upload({ ..., timeoutMs })`; the SDK default remains 60 seconds. The allowed range is 1,000 to 600,000 milliseconds.
+Text send calls return an array of API responses, one per chunk. Raw and media sends return the corresponding API response. File storage writes JSON through an exclusive temporary file, syncs it, renames it, and syncs the directory. The upload deadline is configurable with `new WeChatBot({ uploadTimeoutMs: 300_000 })`, per `bot.upload({ ..., timeoutMs })`, or through the legacy `WECHAT_CDN_UPLOAD_TIMEOUT_MS` environment variable. The default is 300 seconds; the allowed range is 1,000 to 600,000 milliseconds.
 
 These contracts are covered by local tests. Live WeChat delivery, pairing, CDN behavior and restart recovery require separate acceptance testing by the consuming service.
 
