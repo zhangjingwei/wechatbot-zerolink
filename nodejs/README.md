@@ -46,6 +46,8 @@ await bot.login()
 
 See the [protocol compatibility audit](https://github.com/zhangjingwei/wechatbot-zerolink/blob/feat/realname-pin-binding/docs/protocol-compatibility-3.0.0-beta-0.md) for implementation scope and live validation gaps.
 
+Run `npm run test:binding-contract` to exercise the complete binding request sequence against an in-process protocol mock. The command does not contact WeChat, scan a QR code, or start message polling.
+
 ## Architecture
 
 ```

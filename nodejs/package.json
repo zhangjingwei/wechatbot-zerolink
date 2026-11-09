@@ -17,6 +17,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "node --experimental-vm-modules node_modules/.bin/vitest run",
+    "test:binding-contract": "node --experimental-vm-modules node_modules/.bin/vitest run tests/binding-contract.test.ts",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/vitest",
     "lint": "tsc --noEmit",
     "prepublishOnly": "npm run build"

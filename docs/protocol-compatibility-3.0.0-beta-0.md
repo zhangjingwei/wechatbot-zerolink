@@ -30,3 +30,5 @@ The real-name CGI uses HTTPS GET at `https://weixin110.qq.com/security/acct/botr
 ## Verification
 
 Run from `nodejs/`: `npm install`, `npm run lint`, `npm test`, `npm run build`, and `npm pack --dry-run`. Before integrating Weixin Link, verify package publication/installation, both owner flows on a test account, PIN challenge, cancellation, QR expiry, and credential recovery using the real service.
+
+`npm run test:binding-contract` is the isolated first-stage acceptance command. It uses the public `WeChatBot.login()` entry, real HTTP request builders, and an in-process mock of the two Tencent endpoints. It checks self binding, proactive PIN and challenge submission, other-owner authorization ordering and ticket transfer, rejection, invalid-ticket refresh, QR expiry, and cancellation. It never opens a socket or starts message polling. It does **not** establish live server acceptance, operator QR rendering, real PIN delivery, or WeChat client message delivery.
