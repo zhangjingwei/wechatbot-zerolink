@@ -44,7 +44,7 @@ await bot.login()
 
 `bindOwner: 'self'` is the default. `verifyPin: false` omits the proactive PIN field, but a server PIN challenge is still handled. Both `need_verifycode` and `confirmed_but_need_verifycode` invoke `onVerifyCode`. `onRealnameQrUrl` is required in `other` mode so authorization does not proceed invisibly. For noninteractive services, provide `onVerifyCode` as well; otherwise the SDK reads stdin. `loginOptions` also supplies the owner mode after a process restart. A canceled login can use `bot.login({ signal })`.
 
-See [protocol compatibility audit](../docs/protocol-compatibility-3.0.0-beta-0.md) for implementation scope and live validation gaps.
+See the [protocol compatibility audit](https://github.com/zhangjingwei/wechatbot-zerolink/blob/feat/realname-pin-binding/docs/protocol-compatibility-3.0.0-beta-0.md) for implementation scope and live validation gaps.
 
 ## Architecture
 
