@@ -2,7 +2,11 @@
 
 微信 iLink Bot 的独立 Node.js SDK。源码、示例和测试位于 [`nodejs/`](nodejs/)。本仓库基于上游 `corespeed-io/wechatbot` 的 `node-v2.2.0` 版本，现只维护 Node.js 实现。
 
-当前仓库根目录声明的包名为 `wechatbot-zerolink`，版本为 `2.2.0-zerolink.2`。此分支新增的微信 3.0.0 beta 绑定协议适配见[协议审计](docs/protocol-compatibility-3.0.0-beta-0.md)。该包尚未发布到 npm。
+当前发布版本为 [`wechatbot-zerolink@2.2.0-zerolink.2`](https://www.npmjs.com/package/wechatbot-zerolink)，对应 npm 的 `beta` 标签。微信 3.0.0 beta 绑定协议适配见[协议审计](docs/protocol-compatibility-3.0.0-beta-0.md)。
+
+```sh
+npm install wechatbot-zerolink@beta
+```
 
 ## 构建与测试
 

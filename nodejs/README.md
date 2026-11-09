@@ -4,7 +4,7 @@ An independent Node.js fork of `@wechatbot/wechatbot` 2.2.0, adding the binding 
 
 ## Install
 
-The package has not been published to npm. Install a pinned Git commit with `npm install 'git+https://github.com/zhangjingwei/wechatbot-zerolink.git#<commit>'`, or use a generated `.tgz` artifact. The repository root packages the Node.js SDK from `nodejs/` for Git installation.
+Install the published beta with `npm install wechatbot-zerolink@beta`, or pin `wechatbot-zerolink@2.2.0-zerolink.2`. The repository root also packages the Node.js SDK from `nodejs/` for Git installation.
 
 Requires Node.js >= 22 (for native fetch). Zero runtime dependencies.
 
